@@ -1,4 +1,7 @@
 #include <sys/ptrace.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -10,7 +13,15 @@ const int long_size = sizeof(long);//字长 若本机是64位，则字长应为8
 /**
 * TODO 反转str指针指向的字符串
 **/
-void reverse(char *str){
+void reverse(char *str)
+{
+	int len = strlen(str) - 1;
+	char tmp;
+	for (int i = 0; i < (len >> 1); ++i) {
+		tmp = str[i];
+		str[i] = str[len - i];
+		str[len - i] = tmp;
+	}
 }
 
 /**
@@ -19,15 +30,25 @@ void reverse(char *str){
 * 所以ptrace每次读取的长度都是8byte。
 * 你可能会用到：memcpy函数
 **/
-void getdata(pid_t child, long addr, char *str, int len){
+void getdata(pid_t child, long addr, char *str, int len)
+{
+	long long peek_data;
+	for (int i = 0; i < len; ++i) {
+		peek_data = ptrace(PTRACE_PEEKDATA, child, addr + i, NULL);
+		str[i] = peek_data;
+		str[i+1] = '\0';
+	}
 }
 
 /**
  * TODO 往子进程写数据 从str中得到需要写的长度为len的字符串，写到地址addr中去。
  * 使用 ptrace 的 PTRACE_POKEDATA 来写，需要注意的是由于64位机器的字长是8byte。
  * */
-void putdata(pid_t child, long addr, char *str, int len){
-
+void putdata(pid_t child, long addr, char *str, int len)
+{
+	for (int i = 0; i < len; ++i) {
+		ptrace(PTRACE_POKEDATA, child, addr + i, str + i);
+	}
 }
 
 int main(){
@@ -52,7 +73,7 @@ int main(){
       if(WIFEXITED(status)) //遇到子进程退出信号，退出循环
           break;
       // 使用 PTRACE_PEEKUSER 来获取系统调用号。
-      orig_rax = ptrace(PTRACE_PEEKUSER, child, 8 * ORIG_RAX, NULL);
+      orig_rax = ptrace(PTRACE_PEEKUSER, child, long_size * ORIG_RAX, NULL);
       if(orig_rax == SYS_write) {
         if(toggle == 0) {
           toggle = 1;
@@ -62,6 +83,10 @@ int main(){
           * 需要注意的是，RAX的宏定义是 ORIG_RAX，
           * 而 RDI RSI RDX 的宏定义为 RDI RSI RDX
           **/
+		  params[0] = ptrace(PTRACE_PEEKUSER, child, long_size * RDI, NULL);
+		  params[1] = ptrace(PTRACE_PEEKUSER, child, long_size * RSI, NULL);
+		  params[2] = ptrace(PTRACE_PEEKUSER, child, long_size * RDX, NULL);
+
           str = (char *)calloc((params[2]+1), sizeof(char));
           getdata(child, params[1], str,
                   params[2]);
@@ -72,6 +97,7 @@ int main(){
           toggle = 0;
        }
      }
+	  ptrace(PTRACE_SYSCALL, child, NULL, NULL);
     /**
     * TODO 使用 PTRACE_SYSCALL 来让子进程进行系统调用。
     **/
