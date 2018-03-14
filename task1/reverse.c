@@ -47,7 +47,7 @@ void getdata(pid_t child, long addr, char *str, int len)
 void putdata(pid_t child, long addr, char *str, int len)
 {
 	for (int i = 0; i < len; ++i) {
-		ptrace(PTRACE_POKEDATA, child, addr + i, str + i);
+		ptrace(PTRACE_POKEDATA, child, addr + i, *(str + i));
 	}
 }
 
@@ -88,11 +88,9 @@ int main(){
 		  params[2] = ptrace(PTRACE_PEEKUSER, child, long_size * RDX, NULL);
 
           str = (char *)calloc((params[2]+1), sizeof(char));
-          getdata(child, params[1], str,
-                  params[2]);
+          getdata(child, params[1], str, params[2]);
           reverse(str);
-          putdata(child, params[1], str,
-                  params[2]);
+          putdata(child, params[1], str, params[2]);
          } else {
           toggle = 0;
        }
